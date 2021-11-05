@@ -12,6 +12,7 @@
 namespace Mautic\LeadBundle\Controller;
 
 use Mautic\CoreBundle\Factory\PageHelperFactoryInterface;
+use Mautic\LeadBundle\Entity\EmailRepository;
 use Mautic\LeadBundle\Entity\LeadRepository;
 
 trait EntityContactsTrait
@@ -69,16 +70,18 @@ trait EntityContactsTrait
         $pageHelper        = $pageHelperFacotry->make("mautic.{$sessionVar}", $page);
 
         $filter     = ['string' => $search, 'force' => []];
-        $orderBy    = $this->get('session')->get('mautic.'.$sessionVar.'.contact.orderby', 'l.id');
+        $orderBy    = $this->get('session')->get('mautic.'.$sessionVar.'.contact.orderby', 'entity.lead_id');
         $orderByDir = $this->get('session')->get('mautic.'.$sessionVar.'.contact.orderbydir', 'DESC');
         $limit      = $pageHelper->getLimit();
         $start      = $pageHelper->getStart();
 
         /** @var LeadRepository $repo */
         $repo     = $this->getModel('lead')->getRepository();
-        $contacts = $repo->getEntityContacts(
+        /** @var EmailRepository $repo */
+        $email_repo     = $this->getModel('email')->getRepository();
+        $contacts       = $repo->getEntityContacts(
             [
-                'withTotalCount' => true,
+                'withTotalCount' => false,
                 'start'          => $start,
                 'limit'          => $limit,
                 'filter'         => $filter,
@@ -93,7 +96,7 @@ trait EntityContactsTrait
             $contactColumnName
         );
 
-        $count = $contacts['count'];
+        $count = $email_repo->getEmailContactsCount($entityId);
         if ($count && $count < ($start + 1)) {
             //the number of entities are now less then the current page so redirect to the last page
             $lastPage = $pageHelper->countPage($count);
@@ -120,7 +123,7 @@ trait EntityContactsTrait
         if ($dncChannel && $count > 0) {
             $dnc = $this->getDoctrine()->getManager()->getRepository('MauticLeadBundle:DoNotContact')->getChannelList(
                 $dncChannel,
-                array_keys($contacts['results'])
+                array_keys($contacts)
             );
         }
 
@@ -128,8 +131,8 @@ trait EntityContactsTrait
             [
                 'viewParameters' => [
                     'page'            => $page,
-                    'items'           => $contacts['results'],
-                    'totalItems'      => $contacts['count'],
+                    'items'           => $contacts,
+                    'totalItems'      => $count,
                     'tmpl'            => $sessionVar.'Contacts',
                     'indexMode'       => 'grid',
                     'route'           => $route,
